@@ -1,2 +1,2 @@
-toil
+toil[all]
 miniwdl
