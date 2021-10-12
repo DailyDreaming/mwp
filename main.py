@@ -100,7 +100,7 @@ from schema_salad.sourceline import SourceLine, cmap
 from threading import Thread
 
 from toil.batchSystems.registry import DEFAULT_BATCH_SYSTEM
-from toil.common import Config, Toil, addOptions
+from options import addOptions, Config
 from toil.cwl.utils import (
     download_structure,
     visit_top_cwl_class,
