@@ -1,1 +1,0 @@
-pushd /home/quokka/git/mwp && miniwdl run /home/quokka/git/mwp/data/md5sum/md5sum.wdl -i /home/quokka/git/mwp/data/md5sum/md5sum.json; popd
