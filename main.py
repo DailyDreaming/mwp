@@ -130,55 +130,102 @@ from WDL.CLI import (fill_common,
 logger = logging.getLogger(__name__)
 
 
-class WDLJob(Job):
-    def __init__(self, job, inputs, options):
-        super(WDLJob, self).__init__(
-            cores=1,
-            memory=1024 * 1024 * 1024,
-            disk=1024 * 1024 * 1024,
-            unitName='change_this',
-            displayName='whatever'
-        )
-        self.job = job
-        self.inputs = inputs
-        self.options = options
+# class WDLJob(Job):
+#     def __init__(self, job, inputs, options):
+#         super(WDLJob, self).__init__(
+#             cores=1,
+#             memory=1024 * 1024 * 1024,
+#             disk=1024 * 1024 * 1024,
+#             unitName='change_this',
+#             displayName='whatever'
+#         )
+#         self.job = job
+#         self.inputs = inputs
+#         self.options = options
+#
+#     def run(self, file_store: AbstractFileStore) -> Any:
+#         logger.debug('Running a job.')
+#
+#         self.job = resolve_dict_w_promises(self.job, file_store)
+#
+#         # if self.conditional.is_false(cwljob):
+#         #     return self.conditional.skipped_outputs()
+#
+#         fill_in_defaults(
+#             self.step_inputs, cwljob, self.runtime_context.make_fs_access("")
+#         )
+#         required_env_vars = self.populate_env_vars(cwljob)
+#
+#         output, status = ToilSingleJobExecutor().execute()
+#         # ended_at = datetime.datetime.now()  # noqa F841
+#         # if status != "success":
+#         #     raise cwltool.errors.WorkflowException(status)
+#
+#         # Upload all the Files and set their and the Directories' locations, if needed.
+#         import_files(
+#             file_import_function,
+#             fs_access,
+#             index,
+#             existing,
+#             output,
+#             bypass_file_store=runtime_context.bypass_file_store,
+#         )
+#
+#         return output
 
-    def run(self, file_store: AbstractFileStore) -> Any:
-        logger.debug('Running a job.')
 
-        self.job = resolve_dict_w_promises(self.job, file_store)
-
-        # if self.conditional.is_false(cwljob):
-        #     return self.conditional.skipped_outputs()
-
-        fill_in_defaults(
-            self.step_inputs, cwljob, self.runtime_context.make_fs_access("")
-        )
-        required_env_vars = self.populate_env_vars(cwljob)
-
-        output, status = ToilSingleJobExecutor().execute()
-        # ended_at = datetime.datetime.now()  # noqa F841
-        # if status != "success":
-        #     raise cwltool.errors.WorkflowException(status)
-
-        # Upload all the Files and set their and the Directories' locations, if needed.
-        import_files(
-            file_import_function,
-            fs_access,
-            index,
-            existing,
-            output,
-            bypass_file_store=runtime_context.bypass_file_store,
-        )
-
-        return output
+# def task(wdl: str, inputs: str, **kwargs):
+#     cfg = Loader(logging.getLogger('test'), [])
+#     with open(wdl, 'r') as f:
+#         wdl_content = f.read()
+#     with open(inputs, 'r') as f:
+#         inputs_dict = json.load(f)
+#     doc = WDL.parse_document(wdl_content, version='draft-2')
+#     doc.typecheck()
+#
+#     for task in doc.tasks:
+#         print(task.available_inputs)
+#         print([i.name for i in task.available_inputs])
+#         print(task.required_inputs)
+#         print([i.name for i in task.required_inputs])
+#         inputs_dict = {'inputFile': '/home/quokka/git/toil/src/toil/test/wdl/md5sum/md5sum.input'}
+#         inputs = WDL.values_from_json(inputs_dict, doc.tasks[0].available_inputs, doc.tasks[0].required_inputs)
+#         rundir, outputs = WDL.runtime.run_local_task(cfg, doc.tasks[0], (inputs or WDL.Env.Bindings()),
+#                                                      run_dir='/home/quokka/git/miniwdl/run_dir', **kwargs)
+#         return WDL.values_to_json(outputs)
 
 
-def task(wdl: str, inputs: str, **kwargs):
+def run(
+    uri,
+    task=None,
+    inputs=[],
+    input_file=None,
+    empty=[],
+    none=[],
+    json_only=False,
+    run_dir=None,
+    path=None,
+    check_quant=True,
+    cfg=None,
+    runtime_cpu_max=None,
+    runtime_memory_max=None,
+    env=[],
+    runtime_defaults=None,
+    max_tasks=None,
+    copy_input_files=False,
+    as_me=False,
+    no_cache=False,
+    error_json=False,
+    log_json=False,
+    stdout_file=None,
+    stderr_file=None,
+    no_outside_imports=False,
+    **kwargs,
+):
     cfg = Loader(logging.getLogger('test'), [])
-    with open(wdl, 'r') as f:
+    with open(uri, 'r') as f:
         wdl_content = f.read()
-    with open(inputs, 'r') as f:
+    with open('/home/quokka/git/mwp/data/md5sum/md5sum.json', 'r') as f:
         inputs_dict = json.load(f)
     doc = WDL.parse_document(wdl_content, version='draft-2')
     doc.typecheck()
@@ -224,7 +271,7 @@ def main(args=None):
         if args.command == "check":
             check(**vars(args))
         elif args.command == "run":
-            runner(**vars(args))
+            run(**vars(args))
         elif args.command == "run_self_test":
             run_self_test(**vars(args))
         elif args.command == "localize":
