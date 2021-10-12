@@ -203,7 +203,6 @@ def main(args=None):
 
     config = Config()
     addOptions(parser, config, jobstore_is_optional=True)
-    print(parser)
     subparsers = parser.add_subparsers()
     subparsers.required = True
     subparsers.dest = "command"
