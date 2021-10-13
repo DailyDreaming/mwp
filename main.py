@@ -136,6 +136,7 @@ import signal
 import traceback
 import pickle
 import threading
+import toil
 from concurrent import futures
 from typing import Optional, List, Set, Tuple, NamedTuple, Dict, Union, Iterable, Callable, Any
 from contextlib import ExitStack
@@ -162,48 +163,29 @@ from WDL.runtime.error import RunFailed, Terminated, error_json
 logger = logging.getLogger(__name__)
 
 
-# class WDLJob(Job):
-#     def __init__(self, job, inputs, options):
-#         super(WDLJob, self).__init__(
-#             cores=1,
-#             memory=1024 * 1024 * 1024,
-#             disk=1024 * 1024 * 1024,
-#             unitName='change_this',
-#             displayName='whatever'
-#         )
-#         self.job = job
-#         self.inputs = inputs
-#         self.options = options
-#
-#     def run(self, file_store: AbstractFileStore) -> Any:
-#         logger.debug('Running a job.')
-#
-#         self.job = resolve_dict_w_promises(self.job, file_store)
-#
-#         # if self.conditional.is_false(cwljob):
-#         #     return self.conditional.skipped_outputs()
-#
-#         fill_in_defaults(
-#             self.step_inputs, cwljob, self.runtime_context.make_fs_access("")
-#         )
-#         required_env_vars = self.populate_env_vars(cwljob)
-#
-#         output, status = ToilSingleJobExecutor().execute()
-#         # ended_at = datetime.datetime.now()  # noqa F841
-#         # if status != "success":
-#         #     raise cwltool.errors.WorkflowException(status)
-#
-#         # Upload all the Files and set their and the Directories' locations, if needed.
-#         import_files(
-#             file_import_function,
-#             fs_access,
-#             index,
-#             existing,
-#             output,
-#             bypass_file_store=runtime_context.bypass_file_store,
-#         )
-#
-#         return output
+class WDLJob(Job):
+    def __init__(self, job, options, *args, **kwargs):
+        super(WDLJob, self).__init__(
+            cores=1,
+            memory=1024 * 1024 * 1024,
+            disk=1024 * 1024 * 1024,
+            unitName='change_this',
+            displayName='whatever'
+        )
+        self.job = job
+        self.options = options
+        self.args = args
+        self.kwargs = kwargs
+
+    def run(self, file_store: AbstractFileStore) -> Any:
+        logger.debug('Running a job.')
+        # self.job = resolve_dict_w_promises(self.job, file_store)
+        # fill_in_defaults(self.step_inputs, cwljob, self.runtime_context.make_fs_access(""))
+        # required_env_vars = self.populate_env_vars(cwljob)
+
+        _, output = run_local_task(*self.args, **self.kwargs)
+        # Upload all the Files and set their and the Directories' locations, if needed.
+        return output
 
 
 # def task(wdl: str, inputs: str, **kwargs):
@@ -370,40 +352,42 @@ def _workflow_main_loop(
 
             # run workflow state machine to completion
             state = StateMachine(".".join(logger_id), run_dir, workflow, inputs)
-            while state.outputs is None:
-                if _test_pickle:
-                    state = pickle.loads(pickle.dumps(state))
-                if terminating():
-                    raise Terminated()
-                # schedule all runnable calls
-                stdlib = _StdLib(workflow.effective_wdl_version, cfg, state, cache)
-                next_call = state.step(cfg, stdlib)
-                while next_call:
-                    call_dir = os.path.join(run_dir, next_call.id)
-                    if os.path.exists(call_dir):
-                        logger.warning(
-                            _("call subdirectory already exists, conflict likely", dir=call_dir)
-                        )
-                    sub_args = (cfg, next_call.callee, next_call.inputs)
-                    sub_kwargs = {
-                        "run_id": next_call.id,
-                        "run_dir": os.path.join(call_dir, "."),
-                        "logger_prefix": logger_id,
-                        "_cache": cache,
-                        "_run_id_stack": run_id_stack,
-                    }
-                    # submit to appropriate thread pool
-                    if isinstance(next_call.callee, Tree.Task):
-                        _statusbar.task_backlogged()
-                        _, outputs = run_local_task(*sub_args, **sub_kwargs)
-                    elif isinstance(next_call.callee, Tree.Workflow):
-                        _, outputs = run_local_workflow(*sub_args, **sub_kwargs)
-                    else:
-                        assert False
-                    state.call_finished(next_call.id, outputs)
+            options = Job.Runner.getDefaultOptions('/home/quokka/git/mwp/delete')
+            with toil.common.Toil(options) as toil_workflow:
+                while state.outputs is None:
+                    if _test_pickle:
+                        state = pickle.loads(pickle.dumps(state))
+                    if terminating():
+                        raise Terminated()
+                    # schedule all runnable calls
+                    stdlib = _StdLib(workflow.effective_wdl_version, cfg, state, cache)
                     next_call = state.step(cfg, stdlib)
-                # no more calls to launch right now; wait for an outstanding call to finish
-                assert state.outputs is not None
+                    while next_call:
+                        call_dir = os.path.join(run_dir, next_call.id)
+                        if os.path.exists(call_dir):
+                            logger.warning(
+                                _("call subdirectory already exists, conflict likely", dir=call_dir)
+                            )
+                        sub_args = (cfg, next_call.callee, next_call.inputs)
+                        sub_kwargs = {
+                            "run_id": next_call.id,
+                            "run_dir": os.path.join(call_dir, "."),
+                            "logger_prefix": logger_id,
+                            "_cache": cache,
+                            "_run_id_stack": run_id_stack,
+                        }
+                        # submit to appropriate thread pool
+                        if isinstance(next_call.callee, Tree.Task):
+                            _statusbar.task_backlogged()
+                            _, outputs = run_local_task(*sub_args, **sub_kwargs)
+                        elif isinstance(next_call.callee, Tree.Workflow):
+                            _, outputs = run_local_workflow(*sub_args, **sub_kwargs)
+                        else:
+                            assert False
+                        state.call_finished(next_call.id, outputs)
+                        next_call = state.step(cfg, stdlib)
+                    # no more calls to launch right now; wait for an outstanding call to finish
+                    assert state.outputs is not None
 
             # create output_links
             outputs = link_outputs(
