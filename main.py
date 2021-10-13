@@ -323,7 +323,7 @@ def run(
                                       _test_pickle=False,
                                       run_id_stack=[],
                                       cache=cache)
-    print(out)
+    print({b.name: b.value.value for b in out})
 
 # def run_local_workflow(
 #     cfg: config.Loader,
