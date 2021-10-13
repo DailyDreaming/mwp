@@ -376,7 +376,6 @@ def _workflow_main_loop(
                             "_cache": cache,
                             "_run_id_stack": run_id_stack,
                         }
-                        # submit to appropriate thread pool
                         if isinstance(next_call.callee, Tree.Task):
                             _statusbar.task_backlogged()
                             _, outputs = run_local_task(*sub_args, **sub_kwargs)
