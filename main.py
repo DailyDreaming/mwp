@@ -282,47 +282,47 @@ def run(
 
     logfile = os.path.join(run_dir, "workflow.log")
     with ExitStack() as cleanup:
-        cache = cleanup.enter_context(new_call_cache(cfg, logger))
-        cleanup.enter_context(
-            LoggingFileHandler(
-                logger,
-                logfile,
-            )
-        )
-        if cfg.has_option("logging", "json") and cfg["logging"].get_bool("json"):
+        with WDL.runtime.cache.CallCache(cfg, logger) as cache:
             cleanup.enter_context(
                 LoggingFileHandler(
                     logger,
-                    logfile + ".json",
-                    json=True,
+                    logfile,
                 )
             )
-        logger.notice(  # pyre-fixme
-            _(
-                "workflow start",
-                name=workflow.name,
-                source=workflow.pos.uri,
-                line=workflow.pos.line,
-                column=workflow.pos.column,
-                dir=run_dir,
+            if cfg.has_option("logging", "json") and cfg["logging"].get_bool("json"):
+                cleanup.enter_context(
+                    LoggingFileHandler(
+                        logger,
+                        logfile + ".json",
+                        json=True,
+                    )
+                )
+            logger.notice(  # pyre-fixme
+                _(
+                    "workflow start",
+                    name=workflow.name,
+                    source=workflow.pos.uri,
+                    line=workflow.pos.line,
+                    column=workflow.pos.column,
+                    dir=run_dir,
+                )
             )
-        )
-        logger.debug(_("thread", ident=threading.get_ident()))
-        terminating = cleanup.enter_context(TerminationSignalFlag(logger))
-        write_values_json(inputs, os.path.join(run_dir, "inputs.json"), namespace=workflow.name)
+            logger.debug(_("thread", ident=threading.get_ident()))
+            terminating = cleanup.enter_context(TerminationSignalFlag(logger))
+            write_values_json(inputs, os.path.join(run_dir, "inputs.json"), namespace=workflow.name)
 
-    # inputs = WDL.values_from_json(input_json, doc.tasks[0].available_inputs, doc.tasks[0].required_inputs)
-    # rundir, output_env = WDL.runtime.run(cfg, target, input_env, run_dir=run_dir)
-    out = _workflow_main_loop(cfg=cfg,
-                              workflow=workflow,
-                              inputs=input_env,
-                              run_dir=run_dir,
-                              logger=logger,
-                              logger_id=[__name__],
-                              terminating=terminating,
-                              _test_pickle=False,
-                              run_id_stack=[],
-                              cache=cache)
+            # inputs = WDL.values_from_json(input_json, doc.tasks[0].available_inputs, doc.tasks[0].required_inputs)
+            # rundir, output_env = WDL.runtime.run(cfg, target, input_env, run_dir=run_dir)
+            out = _workflow_main_loop(cfg=cfg,
+                                      workflow=workflow,
+                                      inputs=input_env,
+                                      run_dir=run_dir,
+                                      logger=logger,
+                                      logger_id=[__name__],
+                                      terminating=terminating,
+                                      _test_pickle=False,
+                                      run_id_stack=[],
+                                      cache=cache)
     print(out)
 
 # def run_local_workflow(
@@ -351,7 +351,7 @@ def _workflow_main_loop(
     cache
 ) -> Env.Bindings[Value.Base]:
     assert isinstance(cfg, config.Loader)
-    call_futures = {}
+    tasks = {}
     try:
         # start plugin coroutines and process inputs through them
         with compose_coroutines(
@@ -395,22 +395,15 @@ def _workflow_main_loop(
                     # submit to appropriate thread pool
                     if isinstance(next_call.callee, Tree.Task):
                         _statusbar.task_backlogged()
-                        run_local_task(*sub_args, **sub_kwargs)
+                        _, outputs = run_local_task(*sub_args, **sub_kwargs)
                     elif isinstance(next_call.callee, Tree.Workflow):
-                        run_local_workflow(*sub_args, **sub_kwargs)
+                        _, outputs = run_local_workflow(*sub_args, **sub_kwargs)
                     else:
                         assert False
-                    call_futures[future] = next_call.id
+                    state.call_finished(next_call.id, outputs)
                     next_call = state.step(cfg, stdlib)
                 # no more calls to launch right now; wait for an outstanding call to finish
-                future = next(futures.as_completed(call_futures), None)
-                if future:
-                    __, outputs = future.result()
-                    call_id = call_futures[future]
-                    state.call_finished(call_id, outputs)
-                    call_futures.pop(future)
-                else:
-                    assert state.outputs is not None
+                assert state.outputs is not None
 
             # create output_links
             outputs = link_outputs(
@@ -448,7 +441,7 @@ def _workflow_main_loop(
                 _("call failure propagating", **{"from": getattr(exn, "run_id"), "dir": run_dir})
             )
         # Cancel all future tasks that havent started
-        for key in call_futures:
+        for key in tasks:
             key.cancel()
         raise wrapper from exn
 
