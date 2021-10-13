@@ -381,6 +381,7 @@ def _workflow_main_loop(
                             _, outputs = run_local_task(*sub_args, **sub_kwargs)
                         elif isinstance(next_call.callee, Tree.Workflow):
                             _, outputs = run_local_workflow(*sub_args, **sub_kwargs)
+                            raise
                         else:
                             assert False
                         state.call_finished(next_call.id, outputs)
