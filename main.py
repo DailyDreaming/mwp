@@ -164,7 +164,7 @@ logger = logging.getLogger(__name__)
 
 
 class WDLJob(Job):
-    def __init__(self, job, options, *args, **kwargs):
+    def __init__(self, options, *args, **kwargs):
         super(WDLJob, self).__init__(
             cores=1,
             memory=1024 * 1024 * 1024,
@@ -172,7 +172,6 @@ class WDLJob(Job):
             unitName='change_this',
             displayName='whatever'
         )
-        self.job = job
         self.options = options
         self.args = args
         self.kwargs = kwargs
@@ -381,7 +380,6 @@ def _workflow_main_loop(
                             _, outputs = run_local_task(*sub_args, **sub_kwargs)
                         elif isinstance(next_call.callee, Tree.Workflow):
                             _, outputs = run_local_workflow(*sub_args, **sub_kwargs)
-                            raise
                         else:
                             assert False
                         state.call_finished(next_call.id, outputs)
